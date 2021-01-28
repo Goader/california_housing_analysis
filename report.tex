@@ -1,0 +1,1619 @@
+\documentclass{article}
+
+% skomentowana dla MAC wersja {inputenc}
+ \usepackage[utf8]{inputenc}
+% \usepackage[T1]{fontenc}
+%\usepackage[cp1250]{inputenc}
+\usepackage{amssymb}
+\usepackage{color}
+\usepackage{amsmath}
+\usepackage{Sweave}
+\usepackage{enumerate}
+\usepackage{hyperref}
+\usepackage{polski}
+
+\title{California Housing: Statystyczna analiza danych}
+\author{\textbf{404811, Mykola Haltiuk}, czwartek $17^{50}$\\ 
+\textit{AGH, Wydział Informatyki Elektroniki i Telekomunikacji}\\
+\textit{Rachunek prawdopodobieństwa i statystyka 2020/2021}}
+\date{Kraków, \today}
+
+
+\begin{document}
+\input{report-concordance}
+\maketitle
+
+\textit{Ja, niżej podpisany(na) własnoręcznym podpisem deklaruję, że przygotowałem(łam) przedstawiony do oceny projekt samodzielnie i żadna jego część nie jest kopią pracy innej osoby.}
+\begin{flushright}
+{............................................}
+\end{flushright}
+
+\section{Streszczenie raportu}
+Raport powstał w oparciu o analizę danych dotyczących cen na nieruchomoś\'c w
+Kalifornii stanem na 1990 rok.
+
+\section{Opis danych}
+Dane do projektu pochodzą ze strony \href{https://www.kaggle.com/camnugent/california-housing-prices}{\texttt{Kaggle}}. Są one przedstawione w pliku \textit{.csv}. Ze strony można
+spokojnie ich pobra\'c.
+
+\noindent
+\quad Otóż, dane ska\l adają si\c ez 20640 rekordów o 10 cechach. Każdy rekord
+odpowiada za pewny blok domów. Opis poszczególnych cech:
+
+\begin{itemize}
+  \item \textbf{longitude} - d\l ugoś\'c geograficzna bloku (\textit{numeryczna})
+  \item \textbf{latitude} - szerokoś\'c geograficzna bloku (\textit{numeryczna})
+  \item \textbf{housing\_median\_age} - mediana wieków domów w bloku (\textit{numeryczna})
+  \item \textbf{total\_rooms} - iloś\'c pokoi w bloku (\textit{numeryczna})
+  \item \textbf{total\_bedrooms} - iloś\'c sypaleń w bloku (\textit{numeryczna})
+  \item \textbf{population} - populacja w bloku (iloś\'c osób) (\textit{numeryczna})
+  \item \textbf{households} - iloś\'c gospodarstw w bloku (\textit{numeryczna})
+  \item \textbf{median\_income} - mediana zarobków w tym bloku (\textit{numeryczna})
+  \item \textbf{median\_house\_value} - mediana cen na dom (\textit{numeryczna})
+  \item \textbf{ocean\_proximity} - blizoś\'c do oceanu (\textit{kategoryczna})
+\end{itemize}
+
+\noindent
+\quad Dane nie są gotowe do analizy, potrzebują dużo modyfikowania i czyszczenia. Bardzo dużo jest wartości odstających, praktycznie wszystkie są z góry, czyli wi\c eksze od mediany, co psuje rozk\l ady, które już nie da si\c e nazwa\'c normalnymi (b\c edzie omówiono później i bardziej szczegó\l owo). 
+
+\noindent
+\quad Istnieje kilka problemów z cechami:
+
+\begin{itemize}
+  \item \textbf{housing\_median\_age} jak i \textbf{median\_house\_value} są ograniczone od góry (\textit{capped}). Czyli wszystkie wartości powyżej pewnej wartości $x$ są zmniejszone do tej wartości. To powoduje duże skoncentrowanie w pewnych punktach.
+  \item \textbf{total\_bedrooms} ma niektóre wartości NA, czyli są nieznane (\textit{missing values}).
+  \item \textbf{ocean\_proximity} jest zmienną kategoryczną o 5 różnych wartości, które nie są uporządkowane, co może sprawi\'c problem, bo trudno b\c edzie przekszta\l ci\'c tą zmienną kategoryczną na numeryczną.
+\end{itemize}
+
+\noindent
+\quad Samo przygotowanie danych zostanie opisane troszeczk\c e niżej w sekcji \textbf{Data cleaning}.
+
+\noindent
+\quad Także niektóre cechy nie pokazują ciekawej informacji, wi\c ec zostaną reogranizowane i usuni\c ete, a na ich miejscu zostaną stworzone nowe. Czyli zrobimy tak zwany \textit{feature engineering}. Sam proces zostanie też opisany niżej.
+
+\noindent
+\quad Przed przystąpieniem do przygotowywania danych spróbujmy ich za\l adowa\'c i zobaczy\'c jak wyglądają.
+
+
+\begin{Schunk}
+\begin{Sinput}
+> fpath <- "housing.csv"
+> all_housing <- read.csv(fpath,header=TRUE,stringsAsFactors = FALSE)
+\end{Sinput}
+\end{Schunk}
+
+\noindent
+\quad Otóż, plik przez nas za\l adowany ma nazw\c e \textit{housing.csv}, wczytujemy go jako \textbf{data.frame} zachowując nazwy kolumn.
+
+\noindent
+\quad Zobaczymy czy zgadzają si\c e wymiary z przedstawionymi liczbami wyżej.
+
+\begin{Schunk}
+\begin{Sinput}
+> dim(all_housing)
+\end{Sinput}
+\begin{Soutput}
+[1] 20640    10
+\end{Soutput}
+\end{Schunk}
+
+\noindent
+\quad Jak widzimy, to rzeczywiście: mamy 20640 rekordów o 10 cechach, czyli 20640 wierszy i 10 kolumn. Zobaczymy także czy nazwy odpowiadają przedstawionym wyżej:
+
+\begin{Schunk}
+\begin{Sinput}
+> colnames(all_housing)
+\end{Sinput}
+\begin{Soutput}
+ [1] "longitude"          "latitude"           "housing_median_age" "total_rooms"       
+ [5] "total_bedrooms"     "population"         "households"         "median_income"     
+ [9] "median_house_value" "ocean_proximity"   
+\end{Soutput}
+\end{Schunk}
+
+\noindent
+\quad Wszystko zgadza si\c e. W końcu zobaczymy ma\l y opis tych danych i 4 pierwsze rekordy, żeby dobrze rozumie\'c czym są i jak wyglądają.
+
+\begin{Schunk}
+\begin{Sinput}
+> str(all_housing)
+\end{Sinput}
+\begin{Soutput}
+'data.frame':	20640 obs. of  10 variables:
+ $ longitude         : num  -122 -122 -122 -122 -122 ...
+ $ latitude          : num  37.9 37.9 37.9 37.9 37.9 ...
+ $ housing_median_age: num  41 21 52 52 52 52 52 52 42 52 ...
+ $ total_rooms       : num  880 7099 1467 1274 1627 ...
+ $ total_bedrooms    : num  129 1106 190 235 280 ...
+ $ population        : num  322 2401 496 558 565 ...
+ $ households        : num  126 1138 177 219 259 ...
+ $ median_income     : num  8.33 8.3 7.26 5.64 3.85 ...
+ $ median_house_value: num  452600 358500 352100 341300 342200 ...
+ $ ocean_proximity   : chr  "NEAR BAY" "NEAR BAY" "NEAR BAY" "NEAR BAY" ...
+\end{Soutput}
+\end{Schunk}
+
+\begin{Schunk}
+\begin{Sinput}
+> head(all_housing, 4)
+\end{Sinput}
+\begin{Soutput}
+  longitude latitude housing_median_age total_rooms total_bedrooms population households
+1   -122.23    37.88                 41         880            129        322        126
+2   -122.22    37.86                 21        7099           1106       2401       1138
+3   -122.24    37.85                 52        1467            190        496        177
+4   -122.25    37.85                 52        1274            235        558        219
+  median_income median_house_value ocean_proximity
+1        8.3252             452600        NEAR BAY
+2        8.3014             358500        NEAR BAY
+3        7.2574             352100        NEAR BAY
+4        5.6431             341300        NEAR BAY
+\end{Soutput}
+\end{Schunk}
+
+\noindent
+\quad Wszystkie kolumny, oprócz \textbf{ocean\_proximity} są numeryczne, ostatnia jest cechą kategoryczną, wi\c ec musimy to później naprawi\'c. W tej chwili możemy sobie zobaczy\'c wszystkie możliwe wartości tej zmiennej:
+
+\begin{Schunk}
+\begin{Sinput}
+> levels(as.factor(all_housing$ocean_proximity))
+\end{Sinput}
+\begin{Soutput}
+[1] "<1H OCEAN"  "INLAND"     "ISLAND"     "NEAR BAY"   "NEAR OCEAN"
+\end{Soutput}
+\end{Schunk}
+
+\noindent
+\quad Otóż, mamy 5 możliwych wartości:
+\begin{itemize}
+  \item \textbf{INLAND} - w środku Kalifornii, daleko od oceanu
+  \item \textbf{<1H OCEAN} - w jednej godzinie jazdy od oceanu
+  \item \textbf{NEAR OCEAN} - blisko oceanu
+  \item \textbf{NEAR BAY} - blisko zatoki (San-Francisco)
+  \item \textbf{ISLAND} - wyspa
+\end{itemize}
+
+\noindent
+\quad Dok\l adniej i na karcie to zostanie przedstawione poźniej, gdy b\c edziemy zajmowa\'c si\c e tą zmienną kategoryczną.
+
+\noindent
+\quad Otóż, otrzymaliśmy jakąś pierwotną informacj\c e na temat tego zbioru. Niżej spróbujemy go przeanalizowa\'c jeszcze g\l\c ebiej, żeby przygotowa\'c do prawdziwej statystycznej analizy.
+
+\section{Data cleaning}
+\subsection{\textit{NA} wartości}
+\quad Sprawdźmy sobie ile jest nieznanych wartości w każdej kolumnie.
+
+\begin{Schunk}
+\begin{Sinput}
+> colSums(is.na(all_housing))
+\end{Sinput}
+\begin{Soutput}
+         longitude           latitude housing_median_age        total_rooms 
+                 0                  0                  0                  0 
+    total_bedrooms         population         households      median_income 
+               207                  0                  0                  0 
+median_house_value    ocean_proximity 
+                 0                  0 
+\end{Soutput}
+\end{Schunk}
+
+\noindent
+\quad Jak i by\l o napisane w liście problemów tego zbioru, w kolumnie \textbf{total\_bedrooms} pojawia si\c e 207 nieznanych wartości, z którymi musimy coś zrobi\' c. Istnieją różne sposoby na rozwiązanie tego problemu:
+
+\begin{itemize}
+  \item Usuni\c ecie wszystkich rekordów posiadających nieznane wartości. W naszym przypadku to jest ca\l kiem sensowne podejście, bo takich rekordów jest dużo mniej w stosunku do ilości wszystkich.
+  \item Usuni\c ecie ca\l ej kolumny, ale tak tracimy dużo ciekawej informacji, wi\c e to odrzucamy od razu.
+  \item Przypisanie jakiejś wartości w miejscu nieznanych wartości, np. 0. To nie jest dobrym podejściem i bardzo zależy od samych danych, bo jeżeli dane są z przedzia\l u $[1200, 1250]$, to otrzymujemy bardzo dużo wartości odstających, które psują nasz rozk\l ad. Tą możliwoś\'c od razu odrzucamy.
+  \item Przypisanie jakiejś statystyki rozk\l adu w miejscu nieznanych wartości, czyli mediany, wartości średniej i tp. To jest bardzo sensowne podejście i stosuje si\c e najcz\c eściej.
+  \item Analiza zależności z innymi cechami i sprawdzenie możliwości przewidywania nieznanej wartości na podstawie innych cech. To podejście jest rzadko stosowane, ale jest ciekawe i pozwala nam doś\'c logicznie podebra\'c te wartości, a nie przypisa\'c po prostu coś.
+\end{itemize}
+
+\noindent
+\quad Otóż, o ile chcia\l oby si\c e zachowa\'c wszystkie rekordy, to odrzucamy pierwszą możliwoś\'c. O ile chcemy przeprowadza\'c testy, to 200 jednakowych wartości może troch\c e wp\l ywa\'c na wynik, i o ile dodatkowo ostatnie podejście jest najciekawsze, to spróbujemy stworzy\'c minimalny model regresyjny, żeby podebra\'c nieznane wartości, ale na początku musimy sprawdzi\'c czy zdążymy to zrobi\'c bazując si\c e tylko na jednej zmiennej, czyli chcemy sprawdzi\'c jak silnie wp\l ywają inne cechy na \textbf{total\_bedrooms} i czy są silnie skorelowane.
+
+\noindent
+\quad Żeby policzy\'c macierz wspó\l czynników korelacji, musimy na początku zostawi\'c tylko numeryczne cechy, a przed tym jeszcze usuną\'c rekordy z nieznanymi wartościami:
+
+\begin{Schunk}
+\begin{Sinput}
+> cleaned <- all_housing[rowSums(is.na(all_housing)) == 0,]
+> colSums(is.na(cleaned))  # rechecking
+\end{Sinput}
+\begin{Soutput}
+         longitude           latitude housing_median_age        total_rooms 
+                 0                  0                  0                  0 
+    total_bedrooms         population         households      median_income 
+                 0                  0                  0                  0 
+median_house_value    ocean_proximity 
+                 0                  0 
+\end{Soutput}
+\begin{Sinput}
+> cleanedNumeric <- cleaned[ , purrr::map_lgl(cleaned, is.numeric)]
+> # calculating the correlation matrix
+> hcor <- cor(cleanedNumeric)
+> # plotting
+> corrplot(hcor, method='number')
+\end{Sinput}
+\end{Schunk}
+\includegraphics{report-non-na_only_numeric}
+
+\noindent
+\quad Najbardziej nas interesuje kolumna/wiersz \textbf{total\_bedrooms}, dlatego, że musimy znaleź\'c inną cech\c e, która jest bardzo skorelowana z \textbf{total\_bedrooms}. Jak widzimy, cecha \textbf{households} ma wspó\l czynnik korelacji z interesującą nas kolumną równy 0.98, co jest bardzo dużą wartością i możemy z pewnością powiedzie\'c, że z doś\'c silnym prawdopodobieństwiem zgadniemy wartoś\'c bliską rzeczywistej \textbf{total\_bedrooms} mając wartoś\'c \textbf{households}. Wspó\l czynnik korelacji bliski 1 wskazuje, że im wi\c ecej gospodarstw, tym wi\c ecej sypaleń, co wydaje si\c e by\'c doś\'c logiczne.
+
+\noindent
+\quad Warto także zauważy\'c, że mamy dużo cech silnie skorelowanych, co nie wp\l ywa dobrze na tworzenie różnych modeli regresyjnych i klasyfikacyjnych, bo zwi\c eksza wymiarowoś\'c rekordów nie zwi\c ekszając efektywnej informacji. Ten problem rozwiążemy w \textbf{Feature engineering}.
+
+\noindent
+\quad Wró\'cmy do naszych nieznanych wartości. Spróbujmy narysowa\'c sobie wykres zależności tych dwóch cech i dodatkowo sprawdźmy dok\l adniejszą wartoś\'c wspó\l czynnika korelacji.
+
+\begin{Schunk}
+\begin{Sinput}
+> brcor <- cor(cleaned$total_bedrooms, cleaned$households)
+> brcor
+\end{Sinput}
+\begin{Soutput}
+[1] 0.9797283
+\end{Soutput}
+\end{Schunk}
+
+\begin{figure}[h!]
+\centering
+\begin{Schunk}
+\begin{Sinput}
+> ggplot(cleaned, aes(x=households, y=total_bedrooms)) +
++   labs(title="Total Bedrooms / Households Dependence", 
++        x="Households", y="Total Bedrooms") +
++   theme(plot.title=element_text(size=30, face="bold", family='sans'), 
++         axis.text.x=element_text(size=15, family='sans'), 
++         axis.text.y=element_text(size=15, family='sans'),
++         axis.title.x=element_text(size=25, family='sans'),
++         axis.title.y=element_text(size=25, family='sans')) +
++   geom_point( color="#69b3a2" ) +
++   theme_ipsum(base_family = 'sans')
+\end{Sinput}
+\end{Schunk}
+\includegraphics[width=\textwidth]{report-bed_house_dependence}
+\end{figure}
+
+\noindent
+\quad Otóż, widzimy, że zależnoś\'c jest naprawd\c e bliska liniowej. \textit{Ma\l y komentarz: taki d\l ugi kod zosta\l\ wykorzystany do rysowania wi\c ekszości wykresów, wi\c ec dalej nie b\c edzie przedstawiony, a b\c edą pokazane same wykresy, żeby nie zaśmieca\'c powtarzającym si\c e kodem ten raport}.
+
+\noindent
+\quad Zgodnie z zapowiedzią, tworzymy prosty model regresyjny:
+
+\begin{Schunk}
+\begin{Sinput}
+> bhmodel <- lm(total_bedrooms ~ households, cleaned)
+> bhmodel
+\end{Sinput}
+\begin{Soutput}
+Call:
+lm(formula = total_bedrooms ~ households, data = cleaned)
+
+Coefficients:
+(Intercept)   households  
+     -1.465        1.080  
+\end{Soutput}
+\end{Schunk}
+
+\noindent
+\quad Narysujmy sobie to od razu z prostą stworzoną podczas regresji:
+
+\begin{figure}[h!]
+\centering
+\includegraphics[width=\textwidth]{report-regfig}
+\end{figure}
+
+\noindent
+\quad Model zosta\l\ stworzony, wi\c ec zosta\l o si\c e tylko zamieni\'c wszystkie \textit{NA} na wartości otrzymane z modelu.
+
+\begin{Schunk}
+\begin{Sinput}
+> # replacing the missing values with predictions of our model
+> all_housing$total_bedrooms[is.na(all_housing$total_bedrooms)] = 
++   predict(bhmodel, all_housing[is.na(all_housing$total_bedrooms), ])
+> # checking if the null values has left
+> colSums(is.na(all_housing))
+\end{Sinput}
+\begin{Soutput}
+         longitude           latitude housing_median_age        total_rooms 
+                 0                  0                  0                  0 
+    total_bedrooms         population         households      median_income 
+                 0                  0                  0                  0 
+median_house_value    ocean_proximity 
+                 0                  0 
+\end{Soutput}
+\end{Schunk}
+
+\subsection{Cecha kategoryczna \textit{ocean\_proximity}}
+\quad Pora zają\'c si\c e \textbf{ocean\_proximity}, zmienną kategoryczną, którą musimy przekszta\l ci\'c na numeryczną. Istnieją na to różne sposoby:
+
+\begin{itemize}
+  \item \textbf{Integer encoding} - zamiana wartości kategorycznych na numeryczne wprost stosując pewną funkcj\c e mapującą. To podejście jest stosowane, gdy jest oczywisty pewny porządek wartości kategorycznych (np. \textit{low} - \textit{medium} - \textit{high}).
+  \item \textbf{One-hot encoding} - dekompozycja jednej cechy na kilka tak, żeby każda możliwa wartoś\'c kategoryczna przedstawia\l a nową kolumn\c e. I wtedy dla każdej kolumny przypisujemy \textit{bool}-owe wartości, czyli pewien rekord mia\l\ tą wartoś\'c kategoryczną lub nie mia\l.
+\end{itemize}
+
+\noindent
+\quad Chociaż nasz przypadek bardziej odpowiada podejściu one-hot, nie b\c edziemy komplikowa\'c naszych danych, a po prostu spróbujmy stworzy\'c taki porządek możliwych wartości \textbf{ocean\_proximity}, żeby można by\l o go uzasadni\'c, żeby nie by\l\ przypadkowym.
+
+\noindent
+\quad Na początku mając d\l ugoś\'c i szerokoś\'c geograficzną narysujmy sobie jak są rozrzucone te rekordy z różnymi wartościami \textbf{ocean\_proximity}.
+
+\begin{figure}[h!]
+\centering
+\includegraphics[width=0.68\textwidth]{report-califmapproxim}
+\end{figure}
+
+\noindent
+\quad Tworzymy funkcj\c e mapującą w oparciu o \textbf{median\_house\_value}, bo w\l aśnie cel tego zbioru danych - stworzenie modelu do przewidywania mediany cen domów, żeby firma-klient mog\l a zdecydowa\'c si\c e lub nie na inwestycje.
+
+\noindent
+\quad Otóż, początkowo bazując si\c e na w\l asnym odczuciu stworzymy taki porządek: \textit{INLAND} $\rightarrow$ \textit{<1H OCEAN} $\rightarrow$ \textit{NEAR BAY} $\rightarrow$ \textit{NEAR OCEAN} $\rightarrow$ \textit{ISLAND}. Uzasadnienie temu porządkowi jest to, że im bliżej do oceanu, tym droższe stają si\c e mieszkania.
+
+\noindent
+\quad Ale nie możemy budowa\'c analizy na w\l asnych odczuciach, wi\c ec musimy sprawdzic\'c jakoś naszą propozycj\c e uporządkowania. Porównajmy mediany cen dla poszczególnych wartości kategorycznych i narysujmy od razu ca\l e \textit{box-plot}'y dla porównania:
+
+\begin{figure}[h!]
+\centering
+\includegraphics[width=\textwidth]{report-proximityboxes}
+\end{figure}
+
+\noindent
+\quad Byliśmy doś\'c blisko. Okaza\l o si\c e, że \textit{NEAR BAY} ma median\c e wi\c ekszą od mediany \textit{NEAR OCEAN}. Pierwsze i trzecie kwantyle też odpowiadają naszemu porządkowi. Przewaga \textit{NEAR BAY} może by\'c objaśniona urbanizacją brzegu zatoki. Takie miasta jak San Francisco, Berkley, Oakland, Richmond, Fremont, San Jose, Silicon Valley są rozrzucone po brzegu zatoki. Sacramento też jest doś\'c blisko, a to powoduje wzrost cen na mieszkanie.
+
+\noindent
+\quad Otóż, nasza funkcja mapująca wygląda nast\c epująco: \textit{INLAND} $\rightarrow$ 1, \textit{<1H OCEAN} $\rightarrow$ 2, \textit{NEAR OCEAN} $\rightarrow$ 3, \textit{NEAR BAY} $\rightarrow$ 4, \textit{ISLAND} $\rightarrow$ 5.
+
+\noindent
+\quad Zamieniamy naszą cech\c e kategoryczną na numeryczną.
+
+\begin{Schunk}
+\begin{Sinput}
+> fac <- factor(all_housing$ocean_proximity, 
++        levels=c('INLAND', '<1H OCEAN', 'NEAR OCEAN', 'NEAR BAY', 'ISLAND'))
+> # let's check the mapping
+> data.frame(levels = unique(fac), value = as.numeric(unique(fac)))
+\end{Sinput}
+\begin{Soutput}
+      levels value
+1   NEAR BAY     4
+2  <1H OCEAN     2
+3     INLAND     1
+4 NEAR OCEAN     3
+5     ISLAND     5
+\end{Soutput}
+\begin{Sinput}
+> all_housing$ocean_proximity <- as.numeric(fac)
+\end{Sinput}
+\end{Schunk}
+
+\subsection{Wartości odstające (\textit{outliers})}
+\quad Ze wszystkich wymienionych na początku problemów zosta\l\ si\c e tylko jeden - ograniczone wartości (\textit{capped}). Z box-plotu w poprzedniej sekcji możemy zobaczy\'c jak dużo wartości cen są na poziomie 500 tysi\c ecy dolarów. Jest to dlatego, jak by\l o wcześniej już powiedziane, że wszystkie ceny powyżej tego progu zosta\l y zapisane równymi temu progowi. To tworzy pewne problemy z rozk\l adem i może wp\l yną\'c na regresj\c e doś\'c znacząco.
+
+\noindent
+\quad Znajdźmy ten próg i sprawdźmy ile wartości mu odpowiadają:
+
+\begin{Schunk}
+\begin{Sinput}
+> lim <- max(all_housing$median_house_value)
+> lim
+\end{Sinput}
+\begin{Soutput}
+[1] 500001
+\end{Soutput}
+\begin{Sinput}
+> sum(all_housing$median_house_value == lim)
+\end{Sinput}
+\begin{Soutput}
+[1] 965
+\end{Soutput}
+\end{Schunk}
+
+\noindent
+\quad Czyli tak naprawd\c e, jeżeli rzeczywisty rozk\l ad wartości jest $X$, to nasz $Y = min(X, 500k)$.
+
+\noindent
+\quad Co możemy z tym zrobi\'c?
+
+\begin{itemize}
+  \item Możemy ich usuną\'c tracąc 5\% danych i zamiast dużej ściany rekordów w tym miejscu powstanie przepaś\'c, co też nie jest najlepszym rozwiązaniem.
+  \item W przypadku gdy nie potrzebujemy, żeby model przewidywa\l\ wartości powyżej 500k, to najlepszym rozwiązaniem b\c edzie zostawienie tego jak jest.
+  \item W innym przypadku, musielibyśmy znaleź\'c prawdziwe wartości dla tych rekordów co dla nas nie jest ani istotne, ani możliwe, wi\c ec tą opcj\c e od razu odrzucamy.
+\end{itemize}
+
+\noindent
+\quad Usuwamy czy zostawiamy? Dla potrzeb statystycznych zostawimy sobie te dane, bo mogą by\'c ciekawe później, zawsze b\c edziemy mieli możliwoś\'c odfiltrowania tych outlier'ów.
+
+\noindent
+\quad Także zauważamy, że pomys\l\ porównywa\'c wartości kategoryczne przy pomocy mediany by\l\ dobrym, bo wartoś\'c średnia psuje si\c e przy takiej zamianie rozk\l adów i ograniczaniu wartości, a mediana zostaje si\c e taką samą dopóki ta zmiana rozk\l adu nie zmienia po\l ow\c e wartości.
+
+\noindent
+\quad Otóż, wszystkie problemy zosta\l y rozwiązane lub przynajmniej rozpatrzone, nasz zbiór danych już jest zmodyfikowany. Możemy go sobie zapisa\'c jako odr\c ebny plik, żeby potem nie powtarza\'c tego samego.
+
+\begin{Schunk}
+\begin{Sinput}
+> write.csv(all_housing, file="cleaned_housing.csv", sep=",", 
++           col.names=TRUE, row.names=FALSE)
+\end{Sinput}
+\end{Schunk}
+
+\section{Feature engineering}
+\subsection{Tworzenie nowych cech}
+
+\noindent
+\quad Otóż, spróbujmy sobie narysowa\'c rozk\l ady wszystkich cech:
+
+\begin{figure}[h!]
+\centering
+\includegraphics[width=0.98\textwidth]{report-distrs}
+\end{figure}
+
+\noindent
+\quad Jak widzimy, dużo rozk\l adów mają ci\c eżki prawy ogon, czyli są \textit{right-tailed}, \textit{heavy-tailed}. Musimy coś z tym zrobi\'c jeżeli chcemy efektywnie testowa\'c i stosowa\'c dane z tych kolumn/cech. Także wcześniej zauważyliśmy, że \textbf{median\_house\_value} jest bardzo s\l abo powiązana z wi\c eksząścią cech, co nie u\l atwia nam życia. Wi\c ec spróbujmy rozwiąza\'c od razu kilka problemów przy pomocy \textit{feature engineering}, czyli tworzenie/modyfikacja/usuwanie kolumn tak, żeby dojś\'c do stanu z lepszą wygodą dla nas.
+
+\noindent
+\quad Patrząc na podane nam kolumny, możemy śmia\l o stwierdzi\'c, że \textbf{total\_rooms}, \textbf{total\_bedrooms} absolutnie nic nie wnoszą z praktycznego punktu widzenia, ponieważ bardzo zależą od \textbf{households}. Te duże wartości wspó\l czynników korelacji też naprawimy w ten sposób. Ótóż, przetestujmy sobie takie nowe kolumny/cechy:
+
+\begin{itemize}
+  \item \textbf{bedrooms\_per\_rooms} - iloś\'c sypalni na pokój
+  \item \textbf{rooms\_per\_household} - iloś\'c pokoji na gospodarstwo
+  \item \textbf{bedrooms\_per\_person} - iloś\'c sypalni na osob\c e
+  \item \textbf{rooms\_per\_person} - iloś\'c pokoji na osob\c e
+  \item \textbf{bedrooms\_per\_household} - iloś\'c sypalni na gospodarstwo
+  \item \textbf{people\_per\_household} - iloś\'c osób na gospodarstwo
+\end{itemize}
+
+\noindent
+\quad Oczywiście, że nie możemy zostawi\'c wszystkie cechy, musimy usuną\'c ich tyle, żeby nie straci\'c informacji i jednocześnie jakaś cecha nie by\l a zdefiniowana jako liniowa kombinacja innych cech.
+
+\noindent
+\quad Moglibyśmy stworzy\'c jeszcze i inne cechy. Dobrym pomys\l em by\l oby stworzenie cechy wyznaczającej odleg\l oś\'c do najbliższego dużego miasta i podobne geograficzne cechy, bo możemy to zrobi\'c stosując \textbf{longitude} i \textbf{latitude}. Ale to jest już nadmiar dla projektu naszej skali, wi\c ec kontynuujmy z danymi, które mamy.
+
+\noindent
+\quad Otóż, stwórzmy takie nowe dane:
+
+\begin{Schunk}
+\begin{Sinput}
+> housing$bedrooms_per_rooms <- housing$total_bedrooms / housing$total_rooms
+> housing$rooms_per_household <- housing$total_rooms / housing$households
+> housing$bedrooms_per_person <- housing$total_bedrooms / housing$population
+> housing$rooms_per_person <- housing$total_rooms / housing$population
+> housing$bedrooms_per_household <- housing$total_bedrooms / housing$households
+> housing$people_per_household <- housing$population / housing$households
+\end{Sinput}
+\end{Schunk}
+
+\newpage
+\noindent
+\quad Sprawdźmy teraz macierz wspó\l czynników korelacji pomi\c edzy nowymi i starymi cechami:
+
+\begin{figure}[h!]
+\centering
+\includegraphics[width=0.9\textwidth]{report-newfcorr}
+\end{figure}
+
+\noindent
+\quad Także sprawdźmy jak wyglądają rozk\l ady nowych cech:
+
+\begin{figure}[h!]
+\centering
+\includegraphics[width=0.9\textwidth]{report-newfdistrs}
+\end{figure}
+
+\noindent
+\quad Widzimy, że jest dużo outlier'ów, wi\c ec na początku odfiltrowa\'c tak, żeby zobaczy\'c bliżej najwi\c ekszą koncentracj\c e punktów.
+
+\begin{figure}[h!]
+\centering
+\includegraphics[width=\textwidth]{report-newfdistrsfilt}
+\end{figure}
+
+\noindent
+\quad Otóż, musimy sobie wybra\'c cechy, które zostawiamy, a które zostaną wyrzucone.
+
+\noindent
+\quad Jak widzimy, \textbf{bedrooms\_per\_person} nic nie wnoszą, wspó\l czynnik korelacji z \textbf{median\_house\_value} jest bardzo niski, wi\c ec wyrzucamy tą cech\c e. Dużo ciekawszym jest dla nas \textbf{bedrooms\_per\_rooms}, bo ma doś\'c znaczący wsp. korelacji z interesującą nas cechą, a także nie ma bliskich do liniowych zależności z innymi cechami. Wi\c ec usuwamy wszystkie cechy powiązane z sypalniami, oprócz tej.
+
+\noindent
+\quad Także ciekawą dla nas cechą jest \textbf{rooms\_per\_person}, bo ma wsp. korelacji równy 0.21, i jest bardziej wygodną, niż \textbf{total\_rooms}. Dodatkowo pokazuje ciekawsze dane. Zmieniamy \textbf{total\_rooms} na nią.
+
+\noindent
+\quad Inną ciekawą cechą nie w jakości znaczącej dla regresji, tylko tym, że ma niskie wsp. korelacji z cechami, bazując si\c e na których, przewidujemy wartoś\'c \textbf{median\_house\_value}, także tym, że ma doś\'c bliski do normalnego rozk\l ad, przynajmniej tak to wygląda na wykresie.
+
+\noindent
+\quad Reszt\c e niepotrzebnych cech usuwamy. Popatrzmy jak wygląda w tej chwili nasz zbiór danych.
+
+\begin{Schunk}
+\begin{Sinput}
+> housingf <- dplyr::select(housing, -c('total_rooms', 'population', 'total_bedrooms',
++                                       'bedrooms_per_household', 'rooms_per_household',
++                                       'bedrooms_per_person'))
+> str(housingf)
+\end{Sinput}
+\begin{Soutput}
+'data.frame':	20640 obs. of  10 variables:
+ $ longitude           : num  -122 -122 -122 -122 -122 ...
+ $ latitude            : num  37.9 37.9 37.9 37.9 37.9 ...
+ $ housing_median_age  : int  41 21 52 52 52 52 52 52 42 52 ...
+ $ households          : int  126 1138 177 219 259 193 514 647 595 714 ...
+ $ median_income       : num  8.33 8.3 7.26 5.64 3.85 ...
+ $ median_house_value  : num  452600 358500 352100 341300 342200 ...
+ $ ocean_proximity     : int  4 4 4 4 4 4 4 4 4 4 ...
+ $ bedrooms_per_rooms  : num  0.147 0.156 0.13 0.184 0.172 ...
+ $ rooms_per_person    : num  2.73 2.96 2.96 2.28 2.88 ...
+ $ people_per_household: num  2.56 2.11 2.8 2.55 2.18 ...
+\end{Soutput}
+\end{Schunk}
+
+\noindent
+\quad Także zobaczmy macierz wsp. korelacji po \textit{feature engineering}.
+
+\begin{figure}[h!]
+\centering
+\includegraphics[width=\textwidth]{report-feendedcorr}
+\end{figure}
+
+\noindent
+\quad Podsumowując, możemy stwierzdi\'c, że pokonaliśmy dobrą robot\c e: nie mamy cech, które są silnie powiązane, oprócz \textbf{longitude} i \textbf{latitude}, ale to wynika z formy Kalifornii, i \textbf{bedrooms\_per\_rooms} i \textbf{median\_income}, ale to nie wp\l ynie doś\'c znacząco na nasz model, wi\c ec możemy ich zostawi\'c. W końcu, mamy dużo nowych cech o dużo lepszej korelacji z \textbf{median\_house\_value}.
+
+\noindent
+\quad Zapisujemy zmodyfikowane dane do kolejnego pliku.
+
+\begin{Schunk}
+\begin{Sinput}
+> write.csv(housingf, file="fe_housing.csv", sep=",", 
++           col.names=TRUE, row.names=FALSE)
+\end{Sinput}
+\end{Schunk}
+
+\subsection{Dodatkowe możliwy zmiany}
+\quad Pozostają nam kilka problemów, które zauważyliśmy:
+
+\begin{itemize}
+  \item \textit{outliers} - wartości odstające dalej bardzo psują nam rozk\l ady, ale zosta\l y omówione wcześniej
+  \item \textit{scaling} - nasze wartości są z różnych zakresów, z różną skalą, jest to niewygodne dla modelu i lepiej by to naprawi\'c. Istnieją różne sposoby, niektóre z nich są opisane na \href{https://en.wikipedia.org/wiki/Feature_scaling}{\texttt{Wikipedii}}. Są to standaryzacja, skalowanie w zależności od średniej lub min-max i podobne. Nie b\c edziemy tego robi\'c tylko dlatego, żeby nie straci\'c same dane, a raczej żeby trzyma\'c ich w początkowym stanie, bo trzymając parametry skalowania zawsze moglibyśmy ich przywróci\'c.
+  \item \textit{tail-heavy distributions} - jest to nasz najwi\c ekszy problem, nawet gorszy od outlier'ów, bo ich zawsze da si\c e usuną\'c, a tutaj nic nie możemy zrobi\'c, bo to jest wp\l yw na dane wprost, co powoduje zmiany ich w\l aściwości. Jednym ciekawym rozwiązaniem jest tranformacja rozk\l adu. Jest to też troch\c e opisane na \href{https://en.wikipedia.org/wiki/Data_transformation_(statistics)}{\texttt{Wikipedii}}.
+\end{itemize}
+
+\section{Analiza danych}
+\quad Otóż, doszliśmy do najważniejszej i najtrudniejszej cz\c eści - analiza samych danych. Jest ona trudn ze wzgl\c edu na bardzo dużą iloś\'c regu\l i różnorodnych testów, które są potrzebne do przeprowadzenia porządnej analizy. Tym my si\c e w\l aśnie i zajmiemy.
+
+\subsection{Wst\c ep}
+\quad Musimy sobie dobrze określi\'c regu\l y, które b\c edziemy stosowa\'c dalej, żeby zawsze mie\'c możliwoś\'c odniesienia do nich.
+
+\noindent
+\quad Źród\l em regu\l\ zosta\l\ ten artyku\l\ naukowy: \textit{J. Uttley - Power Analysis, Sample Size, and Assessment of Statistical Assumptions—Improving the Evidential Value of Lighting Research} (2019). Można znaleź\'c ca\l oś\'c \href{https://www.tandfonline.com/doi/pdf/10.1080/15502724.2018.1533851}{\texttt{tutaj}}. Najbardziej interesują nas punkty 3.1 - 3.4, które są na stronach 5 - 11 w dokumencie, który znajduje si\c e pod przedstawionym linkiem. Opisują one jakie za\l ożenia stosujemy do parametrycznych testów i nieparametrycznych, i jak je sprawdzi\'c wraz z możliwymi problemami przy ich stosowaniu. Wi\c ec, ja spróbuj\c e tu krótko określi\'c jak b\c edziemy post\c epowali dalej, bazując si\c e na tym artykule naukowym.
+
+\newpage
+\noindent
+\quad Odnosząc si\c e do Tabeli nr 3 w podanym artykule, możemy sobie rozdzieli\'c najcz\c eściej stosowane testy na parametryczne i nieparametryczne.
+
+\begin{figure}[h!]
+\centering
+\includegraphics[width=\textwidth]{paramtests.png}
+\end{figure}
+
+\noindent
+\quad Do tej tabeli później b\c edziemy si\c e odwo\l ywa\'c, wi\c ec jest bardzo ważna dla nas. 
+
+\noindent
+\quad Nie określiliśmy różnic\c e pomi\c edzy testami parametrycznymi i nieparametrycznymi. Otóż, parametryczne testy są bardziej precyzyjne, ale wymagają spe\l nienia pewnych za\l ożeń stosujących si\c e samych danych. Bez spe\l nienia ich, nie możemy stwierdzi\'c, że wynik otrzymany z tego testu jest odpowiadający rzeczywistości (nigdy tego nie możemy stwierdzi\'c, bo statystyka nigdy nie określa czegoś na 100\%, ale wtedy niepewnoś\'c jest bardzo duża). W\l aśnie możliwe problemy związane z niedotrzymaniem tych za\l ożeń są przedstawione w punkcie 3.4 w podanym artykule. Także w punkcie 3.1 jest podana informacja, że z 50 sprawdzonych artyku\l ów naukowych tylko 22\% mieli sprawdzone te za\l ożenia, co sprawia, że wyniki w nich podane mogą silnie różni\'c si\c e od rzeczywistości. To potwierdza ważnoś\'c testowania za\l ożeń i jednocześnie pokazuje jak rzadko to jest robione w akademic\c e, i to jest duży problem. W punkcie 3.5 są przedstawione przyk\l ady takiego niedotrzymania regu\l. Ale nie o tym tutaj mówimy, wi\c e b\c edziemy stara\'c si\c e w miar\c e możliwości przeprowadza\'c wszystkie możliwe badanie przed stwierdzeniem czegokolwiek.
+
+\noindent
+\quad Z tabeli nr 2 podanego artyku\l u określamy najcz\c estsze za\l ożenia testu parametrycznego.
+
+\begin{figure}[h!]
+\centering
+\includegraphics[width=\textwidth]{assumptions.png}
+\end{figure}
+
+\noindent
+\quad Z podanej tablicy najbardziej nas ciekawią ostatni dwa punkty, ponieważ pierwsze dwa muszą by\'c uwzgl\c ednione jeszcze przy tworzeniu samych danych, co do ostatnich dwóch, to w\l aśnie ich możemy sprawdzi\'c przed stosowaniem testów i artyku\l\ nam podaje ca\l ą list\c e sposobów na to, które b\c edziemy stosowa\'c.
+
+\noindent
+\quad Otóż, przejdźmy już do analizy podstawowej naszego zbioru danych.
+
+\subsection{Analiza podstawowa}
+\quad Troch\c e już wcześniej zosta\l y przedstawione te dane, wi\c ec bez zb\c ednego opisu obliczmy sobie wszystkie momenty i inne elementy statystyki opisowej.
+
+\begin{Schunk}
+\begin{Sinput}
+> head(housing, 4)
+\end{Sinput}
+\begin{Soutput}
+  longitude latitude housing_median_age households median_income median_house_value
+1   -122.23    37.88                 41        126        8.3252             452600
+2   -122.22    37.86                 21       1138        8.3014             358500
+3   -122.24    37.85                 52        177        7.2574             352100
+4   -122.25    37.85                 52        219        5.6431             341300
+  ocean_proximity bedrooms_per_rooms rooms_per_person people_per_household
+1               4          0.1465909         2.732919             2.555556
+2               4          0.1557966         2.956685             2.109842
+3               4          0.1295160         2.957661             2.802260
+4               4          0.1844584         2.283154             2.547945
+\end{Soutput}
+\begin{Sinput}
+> summary(housing)
+\end{Sinput}
+\begin{Soutput}
+   longitude         latitude     housing_median_age   households     median_income    
+ Min.   :-124.3   Min.   :32.54   Min.   : 1.00      Min.   :   1.0   Min.   : 0.4999  
+ 1st Qu.:-121.8   1st Qu.:33.93   1st Qu.:18.00      1st Qu.: 280.0   1st Qu.: 2.5634  
+ Median :-118.5   Median :34.26   Median :29.00      Median : 409.0   Median : 3.5348  
+ Mean   :-119.6   Mean   :35.63   Mean   :28.64      Mean   : 499.5   Mean   : 3.8707  
+ 3rd Qu.:-118.0   3rd Qu.:37.71   3rd Qu.:37.00      3rd Qu.: 605.0   3rd Qu.: 4.7432  
+ Max.   :-114.3   Max.   :41.95   Max.   :52.00      Max.   :6082.0   Max.   :15.0001  
+ median_house_value ocean_proximity bedrooms_per_rooms rooms_per_person  
+ Min.   : 14999     Min.   :1.000   Min.   :0.1000     Min.   : 0.00255  
+ 1st Qu.:119600     1st Qu.:1.000   1st Qu.:0.1754     1st Qu.: 1.52238  
+ Median :179700     Median :2.000   Median :0.2033     Median : 1.93794  
+ Mean   :206856     Mean   :2.034   Mean   :0.2131     Mean   : 1.97697  
+ 3rd Qu.:264725     3rd Qu.:2.000   3rd Qu.:0.2399     3rd Qu.: 2.29609  
+ Max.   :500001     Max.   :5.000   Max.   :1.0000     Max.   :55.22222  
+ people_per_household
+ Min.   :   0.6923   
+ 1st Qu.:   2.4297   
+ Median :   2.8181   
+ Mean   :   3.0707   
+ 3rd Qu.:   3.2823   
+ Max.   :1243.3333   
+\end{Soutput}
+\begin{Sinput}
+> # all the decsriptive values (look at the skew and kurt, should see tail-heavy)
+> describeBy(housing)
+\end{Sinput}
+\begin{Soutput}
+                     vars     n      mean        sd    median   trimmed       mad      min
+longitude               1 20640   -119.57      2.00   -118.49   -119.52      1.90  -124.35
+latitude                2 20640     35.63      2.14     34.26     35.51      1.82    32.54
+housing_median_age      3 20640     28.64     12.59     29.00     28.49     14.83     1.00
+households              4 20640    499.54    382.33    409.00    441.20    223.87     1.00
+median_income           5 20640      3.87      1.90      3.53      3.65      1.58     0.50
+median_house_value      6 20640 206855.82 115395.62 179700.00 192773.00 101409.84 14999.00
+ocean_proximity         7 20640      2.03      0.94      2.00      1.92      1.48     1.00
+bedrooms_per_rooms      8 20640      0.21      0.06      0.20      0.21      0.05     0.10
+rooms_per_person        9 20640      1.98      1.15      1.94      1.92      0.57     0.00
+people_per_household   10 20640      3.07     10.39      2.82      2.86      0.62     0.69
+                           max     range  skew kurtosis     se
+longitude              -114.31     10.04 -0.30    -1.33   0.01
+latitude                 41.95      9.41  0.47    -1.12   0.01
+housing_median_age       52.00     51.00  0.06    -0.80   0.09
+households             6082.00   6081.00  3.41    22.05   2.66
+median_income            15.00     14.50  1.65     4.95   0.01
+median_house_value   500001.00 485002.00  0.98     0.33 803.22
+ocean_proximity           5.00      4.00  0.73    -0.29   0.01
+bedrooms_per_rooms        1.00      0.90  2.24    14.23   0.00
+rooms_per_person         55.22     55.22 17.77   600.46   0.01
+people_per_household   1243.33   1242.64 97.63 10647.40   0.07
+\end{Soutput}
+\begin{Sinput}
+> # calculating all the moments
+> all.moments(housing)
+\end{Sinput}
+\begin{Soutput}
+           [,1]       [,2]      [,3]        [,4]      [,5]         [,6]     [,7]      [,8]
+[1,]     1.0000    1.00000   1.00000      1.0000  1.000000 1.000000e+00 1.000000 1.0000000
+[2,]  -119.5697   35.63186  28.63949    499.5397  3.870671 2.068558e+05 2.034012 0.2131251
+[3,] 14300.9282 1274.19162 978.60877 395708.8499 18.591242 5.610483e+10 5.028198 0.0487909
+         [,9]      [,10]
+[1,] 1.000000   1.000000
+[2,] 1.976970   3.070655
+[3,] 5.221706 117.293722
+\end{Soutput}
+\begin{Sinput}
+> # calculating all the central moments
+> all.moments(housing, central=TRUE)
+\end{Sinput}
+\begin{Soutput}
+              [,1]          [,2]         [,3]         [,4]         [,5]          [,6]
+[1,]  1.000000e+00  1.000000e+00 1.000000e+00 1.000000e+00 1.000000e+00  1.000000e+00
+[2,] -2.928235e-15 -2.239724e-15 4.516628e-16 2.767261e-14 1.072893e-16 -1.107186e-11
+[3,]  4.013945e+00  4.562072e+00 1.583886e+02 1.461690e+05 3.609148e+00  1.331550e+10
+             [,7]          [,8]          [,9]         [,10]
+[1,] 1.000000e+00  1.000000e+00  1.000000e+00  1.000000e+00
+[2,] 9.501444e-17 -4.412787e-18 -9.759097e-17 -1.772269e-16
+[3,] 8.909944e-01  3.368585e-03  1.313298e+00  1.078648e+02
+\end{Soutput}
+\end{Schunk}
+
+\noindent
+\quad \textit{Ma\l y komentarz: [1,] odpowiada za zerowy moment, [2,] za pierwszy i td...}
+
+\noindent
+\quad Jak i zosta\l o zaznaczono w komentarzu, jeżeli popatrzy\'c na wspó\l czynnik skośności i kurtoz\c e, to można zobaczy\'c, że są one w wi\c ekszości swojej dodatnie, co powoduje, że mają duży ogon, czyli są rozciągni\c ete bardziej w prawo, bardzo podobnie do rozk\l adu ex-Gaussian, czyli eksponencjalnie-normalnego. Niżej jest on przedstawiony.
+
+\begin{figure}[h!]
+\centering
+\includegraphics[width=0.94\textwidth]{exgaussian.png}
+\end{figure}
+
+\noindent
+\quad Narysujmy sobie jeszcze boxploty do każdej cechy.
+
+\begin{figure}[h!]
+\centering
+\includegraphics[width=0.94\textwidth]{boxplotsdistrs.png}  % should be report-descrboxplots, too much space
+\end{figure}
+
+\noindent
+\quad Widzimy dużą iloś\'c outlier'ów, które psują nam skal\c e, a także wartości różnych statystyk, wi\c e stwórzmy sobie zbiór bez nich.
+
+\begin{Schunk}
+\begin{Sinput}
+> # replacing outliers with NAs to remove them while melting
+> outlier.replace <- function(x){
++   quantiles <- quantile( x, c(.003, .997 ) )
++   x[ x < quantiles[1] ] <- NA
++   x[ x > quantiles[2] ] <- NA
++   return(x)
++ }
+> no_outs <- housing
+> for(i in names(no_outs)){
++   no_outs[[i]] <- outlier.replace(no_outs[[i]])
++ }
+> # outliers per column
+> colSums(is.na(no_outs))
+\end{Sinput}
+\begin{Soutput}
+           longitude             latitude   housing_median_age           households 
+                 117                  120                   62                  124 
+       median_income   median_house_value      ocean_proximity   bedrooms_per_rooms 
+                 124                   54                    5                  124 
+    rooms_per_person people_per_household 
+                 124                  124 
+\end{Soutput}
+\end{Schunk}
+
+\noindent
+\quad Także warto spojrze\'c na \textit{trimmed}, ponieważ to pokazuje jak zmianiają si\c e wartości po usuni\c eciu outlier'ów, i widzimy, że w przypadku niektórych cech to jest doś\'c silna zmiana.
+
+\noindent
+\quad Narysujmy teraz sobie nowe boxploty.
+
+\begin{figure}[h!]
+\centering
+\includegraphics[width=0.8\textwidth]{report-descrboxplotsnoouts}
+\end{figure}
+
+\noindent
+\quad Narysujmy sobie jeszcze g\c estości rozk\l adów \textit{density plots}, czyli tak naprawd\c e rozmazane histogramy.
+
+\begin{figure}[h!]
+\centering
+\includegraphics[width=\textwidth]{report-descrdensitplots}
+\end{figure}
+
+\subsection{Analiza rodzaju rozk\l adu badanych cech}
+\quad Wydzielimy sobie 3 najciekawsze dla nas cechy: \textbf{bedrooms\_per\_rooms}, \textbf{median\_income} i \textbf{median\_house\_value}. Oceńmy na ile one odpowiadają rozk\l adu normalnemu, żeby potem móc przeprowadza\'c różnorodne testy na nich i mie\'c możliwoś\'c stosowania estymatorów.
+
+\noindent
+\quad Zróbmy sobie plan testowania normalności:
+
+\begin{itemize}
+  \item Wizualne testowanie
+  \begin{itemize}
+    \item Histogram
+    \item QQ-plot
+    \item Boxplot
+  \end{itemize}
+  \item Oszacowanie statystyk opisowych
+  \begin{itemize}
+    \item Wspó\l czynnik skośności
+    \item Kurtoza
+  \end{itemize}
+  \item Statystyczne testy odchylenia od rozk\l adu nornalnego (niżej przedstawione możliwe testy)
+  \begin {itemize}
+    \item Shapiro-Wilk test
+    \item Kolmogorov-Smirnov test
+    \item Anderson-Darling test
+    \item D'Agostino-Pearson omnibus test
+    \item Jarque-Bera test
+    \item i inne...
+  \end{itemize}
+\end{itemize}
+
+\noindent
+\quad Także warto zauważy\'c, że w ogólności stosujemy \textit{density plots}, ponieważ są ciekawsze i przyjemniejsze wizualnie. Ale w tym rozdziale b\c edziemy stosowa\'c histogram.
+
+\noindent
+\quad Parametr histogramu, tak zwany \textit{binwidth} może by\'c wyznaczony z regu\l y Freedman-Diaconis, która określa go jako:
+
+\[ binwidth = \frac{2IQR}{\sqrt[3]{n}}\]
+
+\noindent
+\quad Także b\c edziemy stosowa\'c QQ-plot. Niżej jest wygląd tego wykresu dla danych o rozk\l adzie normalnym (czyli to jest prosta).
+
+\begin{figure}[h!]
+\centering
+\begin{Schunk}
+\begin{Sinput}
+> ggplot(data.frame(d = rnorm(1000)), aes(sample=d)) + stat_qq()
+\end{Sinput}
+\end{Schunk}
+\includegraphics[width=\textwidth]{report-qqplotnorm}
+\end{figure}
+
+\noindent
+\quad Podczas stosowania statystyki opisowej do sprawdzenia normalności b\c edziemy pos\l ugiwa\'c si\c e $z$-statystyką bazującą si\c e na wspó\l czynniku skośności i kurtozie. Jest ona wyznaczona jako:
+
+\[ z = \frac{skew}{2SE} \quad z = \frac{kurtosis}{2SE} \]
+
+\noindent
+\quad I w końcu, ze wszystkich pokazanych wyżej możliwych testów na normalnoś\'c b\c edziemy stosowali \textit{Shapir-Wilk test}, ponieważ jest on bardziej czutliwy i mocny, zgodnie z pracami cytowanymi w artykule. A także warto zauważy\'c, że powienien by\'c przeprowadzany na próbkach o rozmiarze nie wi\c ekszym od 50. Jest to powiązane, że w opisie tego testu od 1965 roku przez Shapiro i Wilk'a byli stosowane takie ilości, bo nie mieli dost\c epu do wi\c ekszych. Jest to też opisane w artykule. O ile mamy dużą iloś\'c rekordów, to nie możemy wprost polega\'c na przypadkowości wybierania próbki. Dlatego b\c edziemy robi\'c po 3 testy dla różnych próbek 50-elementowych.
+
+\noindent
+\quad Podczas przeprowadzenia testu zak\l adamy, że \textbf{$H_0$} - hipoteza zerowa - stwierdza, że rozk\l ad jest normalnym, a \textbf{$H_1$} - hipoteza alternatywna - stwierdza, że rozk\l ad takim nie jest.
+ 
+\subsubsection{\textit{bedrooms\_per\_rooms}}
+\begin{figure}[h!]
+\centering
+\begin{Schunk}
+\begin{Sinput}
+> gap <- IQR(no_outs$bedrooms_per_rooms, na.rm=TRUE) / 
++   (length(na.omit(no_outs$bedrooms_per_rooms)) ^ (1/3))
+> no_outs %>% ggplot(aes(x=bedrooms_per_rooms)) + plot.properties +
++   geom_histogram(binwidth = gap) +
++   labs(title='Bedrooms per rooms distribution')
+\end{Sinput}
+\end{Schunk}
+\includegraphics[width=0.99\textwidth]{report-histbpr}
+\end{figure}
+
+\noindent
+\quad Z histogramu wida\'c ten ogon, i możemy już przewidywa\'c, że rozk\l ad nie b\c edzie rozk\l adem normalnym, ale przeprowadźmy dalszą analiz\c e.
+
+\begin{figure}[h!]
+\centering
+\includegraphics[width=\textwidth]{report-qqplotbpr}
+\end{figure}
+
+\noindent
+\quad Widzimy bardzo duże odchylenie od prostej, wi\c ec możemy by\'c pewnymi, że to nie jest rozk\l ad normalny, ale przeprowadźmy dalszą analiz\c e, żeby sobie dodatkowo zobaczy\'c jak b\c edzie si\c e zachowywa\l\ rozk\l ad nie normalny. Dla innych cech potem, jeżeli zobaczymy, że zbiór nie odpowiada rozk\l adowi normalnemu, to nie b\c edziemy kontynuowali obliczeń dla niego.
+
+\noindent
+\quad Nast\c epnym punktem jest boxplot, ale zosta\l\ już wyżej przedstawiony. Punkty pomi\c edzy 1 i 3 kwartylem są doś\'c podobnie roz\l ożone odnośnie mediany, wąsy są doś\'c blisko d\l ugości $1.5IQR$, chociaż wyraźnie wida\'c, że górny jest troszeczk\c e wi\c ekszy. Co pokazuje nienormalnoś\'c - to iloś\'c outlier'ów i ich tendencja pojawia\'c si\c e z góry, czyli nie ma dolnych outrlier'ów.
+
+\noindent
+\quad Dalej testujemy wartoś\'c $z$-statystyki bazującej si\c e na wspó\l czynniku skośności i kurtozie. Powinien by\'c testowany zgodnie z artyku\l em na próbkach nie wi\c ekszych od 200.
+
+\begin{Schunk}
+\begin{Sinput}
+> stat.desc(sample(no_outs$bedrooms_per_rooms, 150), norm=TRUE)
+\end{Sinput}
+\begin{Soutput}
+     nbr.val     nbr.null       nbr.na          min          max        range          sum 
+1.490000e+02 0.000000e+00 1.000000e+00 1.189563e-01 4.735140e-01 3.545577e-01 3.188117e+01 
+      median         mean      SE.mean CI.mean.0.95          var      std.dev     coef.var 
+2.010187e-01 2.139676e-01 5.123579e-03 1.012482e-02 3.911408e-03 6.254125e-02 2.922931e-01 
+    skewness     skew.2SE     kurtosis     kurt.2SE   normtest.W   normtest.p 
+1.523940e+00 3.834990e+00 3.441771e+00 4.358216e+00 8.890042e-01 3.625958e-09 
+\end{Soutput}
+\end{Schunk}
+
+\noindent
+\quad Z tych wyników najbardziej ciekawią nas \textbf{skew.2SE} i \textbf{kurt.2SE}. Dla ma\l ych próbek i $\alpha = 0.05$ prógiem są wartości $\pm 1.96$, ale z zwi\c ekszeniem próbki zmniejsza si\c e $SE$, wi\c ec można zwi\c eksza\'c próg. Oczywiście ten próg nie jest wartością deterministyczną, i stosowany może zosta\'c wybrany na podstawie naszej opinii. W tym przypadku dostajemy, że obie wartości są $> 3.6$, co jest doś\'c znaczącą wartością dla próbki rozmiarem 150. Wi\c ec widzimy odchylenie od rozk\l adu normalnego.
+
+\noindent
+\quad Zosta\l\ nam si\c e test Shapiro-Wilk'a.
+
+\begin{Schunk}
+\begin{Sinput}
+> shapiro.test(sample(no_outs$bedrooms_per_rooms, 50))
+\end{Sinput}
+\begin{Soutput}
+	Shapiro-Wilk normality test
+
+data:  sample(no_outs$bedrooms_per_rooms, 50)
+W = 0.80651, p-value = 1.243e-06
+\end{Soutput}
+\begin{Sinput}
+> shapiro.test(sample(no_outs$bedrooms_per_rooms, 50))
+\end{Sinput}
+\begin{Soutput}
+	Shapiro-Wilk normality test
+
+data:  sample(no_outs$bedrooms_per_rooms, 50)
+W = 0.95984, p-value = 0.09331
+\end{Soutput}
+\begin{Sinput}
+> shapiro.test(sample(no_outs$bedrooms_per_rooms, 50))
+\end{Sinput}
+\begin{Soutput}
+	Shapiro-Wilk normality test
+
+data:  sample(no_outs$bedrooms_per_rooms, 50)
+W = 0.94154, p-value = 0.01551
+\end{Soutput}
+\end{Schunk}
+
+\noindent
+\quad Jak widzimy, $p$ wartoś\'c jest generalnie ma\l a. (\textit{O ile za każdym razem kompilacji sprawozdania zmienia si\c e próbka to trudno jest komentowa\'c otrzymane wyniki}). Jednego razu wyskoczy\l a $p$ wartoś\'c równa $0.89$, co w\l aśnie pokazuje, że zrobiliśmy dobrze robiąc kilka testów jednocześnie. W tym wartoś\'c statystyki $W$ jest doś\'c duża, ale nie dostatecznie $(> 0.98)$, żeby móc troch\c e zmienia\'c próg $p$ wartości.
+
+\noindent
+\quad Otóż, pokazaliśmy, że rozk\l ad badanej cechy \textbf{nie jest normalnym}.
+
+\noindent
+\quad Spróbujmy transformowa\'c cech\c e. Może wtedy dostaniemy rozk\l ad normalny.
+
+\newpage
+\subsubsection{\textit{bedrooms\_per\_rooms} - log10 transformacja}
+\quad Dla początku przeprowadźmy samą transformacj\c e.
+
+\begin{Schunk}
+\begin{Sinput}
+> # log10 distr (could be ln, but the difference is only the constant)
+> bprlog <- data.frame(d = log10(no_outs$bedrooms_per_rooms))
+\end{Sinput}
+\end{Schunk}
+
+\begin{figure}[h!]
+\centering
+\begin{Schunk}
+\begin{Soutput}
+$title
+[1] "Bedrooms per rooms log10-distribution"
+
+attr(,"class")
+[1] "labels"
+\end{Soutput}
+\end{Schunk}
+\includegraphics[width=\textwidth]{report-histlog10bpr}
+\end{figure}
+
+\noindent
+\quad Ooo, dużo lepszy histogram wyszed\l\ nam, nie wida\'c dużego ogonu, wygląda jako rozk\l ad normalny. Zobaczmy co otrzymamy dalej.
+
+\newpage
+\begin{figure}[h!]
+\centering
+\includegraphics[width=\textwidth]{report-qqplotlog10bpr}
+\end{figure}
+
+\noindent
+\quad Widzimy pewne wykrzywienie w QQ-plot, ale to jeszcze nie jest powód ostatocznie stwierdzi\'c, że to nie jest rozk\l adem normalnym. Idziemy dalej.
+
+\noindent
+\quad Nie b\c edziemy rysowali boxplot, lepiej przejdźmy od razu do liczb, bo wykresy są doś\'c podobne do rozk\l adu normalnego, wi\c ec nie możemy nic stwierdzi\'c w żadną stron\c e.
+
+\begin{Schunk}
+\begin{Sinput}
+> stat.desc(sample(bprlog$d, 150), norm=TRUE)
+\end{Sinput}
+\begin{Soutput}
+      nbr.val      nbr.null        nbr.na           min           max         range 
+ 1.480000e+02  0.000000e+00  2.000000e+00 -8.951653e-01 -4.479377e-01  4.472276e-01 
+          sum        median          mean       SE.mean  CI.mean.0.95           var 
+-1.029235e+02 -7.011664e-01 -6.954291e-01  8.480609e-03  1.675966e-02  1.064427e-02 
+      std.dev      coef.var      skewness      skew.2SE      kurtosis      kurt.2SE 
+ 1.031711e-01 -1.483560e-01  2.179415e-01  5.466417e-01 -6.709773e-01 -8.468737e-01 
+   normtest.W    normtest.p 
+ 9.831007e-01  6.606263e-02 
+\end{Soutput}
+\end{Schunk}
+
+\noindent
+\quad Wartości, które nas ciekawią są doś\'c ma\l e, wi\c ec póki co ten rozk\l ad odpowiada normalnemu.
+
+\begin{Schunk}
+\begin{Sinput}
+> shapiro.test(sample(bprlog$d, 50))
+\end{Sinput}
+\begin{Soutput}
+	Shapiro-Wilk normality test
+
+data:  sample(bprlog$d, 50)
+W = 0.96903, p-value = 0.2215
+\end{Soutput}
+\begin{Sinput}
+> shapiro.test(sample(bprlog$d, 50))
+\end{Sinput}
+\begin{Soutput}
+	Shapiro-Wilk normality test
+
+data:  sample(bprlog$d, 50)
+W = 0.97103, p-value = 0.2548
+\end{Soutput}
+\begin{Sinput}
+> shapiro.test(sample(bprlog$d, 50))
+\end{Sinput}
+\begin{Soutput}
+	Shapiro-Wilk normality test
+
+data:  sample(bprlog$d, 50)
+W = 0.9775, p-value = 0.4519
+\end{Soutput}
+\end{Schunk}
+
+\noindent
+\quad \textit{Jest ten sam problem, kompilacja sprawozdania zmienia wartości, tak b\c edzie i dalej przy losowaniu n-elementowej próbki}. Widzimy, że $p$ wartoś\'c jest doś\'c wysoka, wi\c ec nie mamy podstaw do odrzucenia zerowej hipotezy. Wi\c ec, możemy stwierdzi\'c, że ten rozk\l ad jest bliskim do normalnego.
+
+\subsubsection{\textit{median\_income}}
+\begin{figure}[h!]
+\centering
+\includegraphics[width=\textwidth]{report-histmi}
+\end{figure}
+
+\noindent
+\quad Widzimy bardzo duży ogon, sprawdźmy jeszcze QQ-plot, żeby przekona\'c si\c e, i możemy odrzuci\'c od razu.
+
+\begin{figure}[h!]
+\centering
+\includegraphics[width=\textwidth]{report-qqplotmi}
+\end{figure}
+
+\noindent
+\quad Widzimy duże odchylenie od prostej, jeszcze wi\c eksze, niż dla pierwszej cechy. Stwierdzamy, że dany rozk\l ad nie jest rozk\l adem normalnym i odrzucamy go.
+
+\noindent
+\quad Spróbujmy transformowa\'c cech\c e. Może wtedy dostaniemy rozk\l ad normalny.
+
+\subsubsection{\textit{median\_income} - log10 transformacja}
+\quad Dla początku przeprowadźmy samą transformacj\c e.
+
+\begin{Schunk}
+\begin{Sinput}
+> # log10 distr (could be ln, but the difference is only the constant)
+> milog <- data.frame(d = log10(no_outs$median_income))
+\end{Sinput}
+\end{Schunk}
+
+\begin{figure}[h!]
+\centering
+\includegraphics[width=\textwidth]{report-histlog10mi}
+\end{figure}
+
+\noindent
+\quad Rozk\l ad z nast. strony jest doś\'c podobny do normalnego, chociaż wida\'c niektóre zaburzenia, ale one są równomiernie roz\l ożone.
+
+\begin{figure}[h!]
+\centering
+\includegraphics[width=\textwidth]{report-qqplotlog10mi}
+\end{figure}
+
+\noindent
+\quad Wida\'c prostą lini\c e na QQ-plot z nast. strony z pewnymi odkszta\l ceniami na końcach, ale to nie gra dużej roli.
+
+\newpage
+\begin{Schunk}
+\begin{Sinput}
+> stat.desc(sample(milog$d, 150), norm=TRUE)
+\end{Sinput}
+\begin{Soutput}
+     nbr.val     nbr.null       nbr.na          min          max        range          sum 
+150.00000000   0.00000000   0.00000000   0.12525349   1.04497462   0.91972113  83.46741741 
+      median         mean      SE.mean CI.mean.0.95          var      std.dev     coef.var 
+  0.56465381   0.55644945   0.01520418   0.03004366   0.03467506   0.18621240   0.33464387 
+    skewness     skew.2SE     kurtosis     kurt.2SE   normtest.W   normtest.p 
+ -0.13934383  -0.35181019   0.06036220   0.07668291   0.98639182   0.14873843 
+\end{Soutput}
+\end{Schunk}
+
+\noindent
+\quad Wartości, które nas ciekawią są doś\'c niskie.
+
+\begin{Schunk}
+\begin{Sinput}
+> shapiro.test(sample(milog$d, 50))
+\end{Sinput}
+\begin{Soutput}
+	Shapiro-Wilk normality test
+
+data:  sample(milog$d, 50)
+W = 0.95119, p-value = 0.0382
+\end{Soutput}
+\begin{Sinput}
+> shapiro.test(sample(milog$d, 50))
+\end{Sinput}
+\begin{Soutput}
+	Shapiro-Wilk normality test
+
+data:  sample(milog$d, 50)
+W = 0.98217, p-value = 0.6463
+\end{Soutput}
+\begin{Sinput}
+> shapiro.test(sample(milog$d, 50))
+\end{Sinput}
+\begin{Soutput}
+	Shapiro-Wilk normality test
+
+data:  sample(milog$d, 50)
+W = 0.97355, p-value = 0.3331
+\end{Soutput}
+\end{Schunk}
+
+\noindent
+\quad Widzimy duże wartości $p$, w tym i duże wartości $W$, wi\c ec stwierdzamy, że log10-transformowany rozk\l ad tej cechy, jest rozk\l adem normalnym.
+
+\newpage
+\subsubsection{\textit{median\_house\_value}}
+\begin{figure}[h!]
+\centering
+\begin{Schunk}
+\begin{Sinput}
+> gap <- IQR(no_outs$median_house_value, na.rm=TRUE) / 
++   (length(na.omit(no_outs$median_house_value)) ^ (1/3))
+> no_outs %>% ggplot(aes(x=median_house_value)) + plot.properties +
++   geom_histogram(binwidth = gap) +
++   labs(title='Median House Value distribution')
+\end{Sinput}
+\end{Schunk}
+\includegraphics[width=\textwidth]{report-histmhv}
+\end{figure}
+
+\noindent
+\quad Rozk\l ad nawet blisko nie jest podobny do rozk\l adu normalnego. Bardzo psuje widok duża iloś\'c wartości równych 500001 (skąd si\c e pojawili by\l o opisane wcześniej). Ale to nie zmienia faktu, że nawet środkowa cz\c eś\'c nie jest rozk\l adem normalnym. Odrzucamy od razu.
+
+\subsubsection{\textit{median\_house\_value} - log10 transformacja}
+\quad Dla początku przeprowadźmy samą transformacj\c e.
+
+\begin{Schunk}
+\begin{Sinput}
+> # log10 distr (could be ln, but the difference is only the constant)
+> mhvlog <- data.frame(d = log10(no_outs$median_house_value))
+\end{Sinput}
+\end{Schunk}
+
+\noindent
+\quad Dodatkowo odrzucimy te outlier'y. $log10(500001) = 5.69897...$
+
+\begin{Schunk}
+\begin{Sinput}
+> mhvlog <- mhvlog %>% filter(d < 5.698)
+\end{Sinput}
+\end{Schunk}
+
+\newpage
+\begin{figure}[h!]
+\centering
+\begin{Schunk}
+\begin{Soutput}
+$title
+[1] "Median House Value log10-distribution"
+
+attr(,"class")
+[1] "labels"
+\end{Soutput}
+\end{Schunk}
+\includegraphics[width=\textwidth]{report-histlog10mhv}
+\end{figure}
+
+\noindent
+\quad To nam bardzo s\l abo przypomina rozk\l ad normalny. Spróbujmy jedzcze narysowa\'c QQ-plot.
+
+\newpage
+\begin{figure}[h!]
+\centering
+\includegraphics[width=\textwidth]{report-qqplotlog10mhv}
+\end{figure}
+
+\noindent
+\quad Mamy lini\c e bliską do prostej, ale z dużymi wykrzywieniami na końcach. Możemy uważa\'c ten rozk\l ad za bliski normalnemu, ale nie normalnym. Czyli przy stosowaniu testów, możemy by\'c pewnymi, że możliwy b\l ąd nie b\c edzie drastycznym.
+
+\subsection{Estymatory}
+\quad Stwórzmy sobie wygodną struktur\c e do przechowywania estymowanych wartości.
+
+\begin{Schunk}
+\begin{Sinput}
+> estimations <- data.frame(mean=double(),
++                           meanlow=double(),
++                           meanup=double(),
++                           var=double(),
++                           varlow=double(),
++                           varup=double()
++                           )
+\end{Sinput}
+\end{Schunk}
+
+\noindent
+\quad Wzór estymatora punktowego nieobciążonego dla wartości średniej:
+
+\[ \bar{x} = \frac{1}{n}\sum_{x_i \in X} x_i \]
+
+\noindent
+\quad Wzór estymatora punktowego nieobciążonego dla wariancji:
+
+\[ S^2 = \frac{1}{n-1}\sum_{x_i \in X} (x_i - \bar{x})^2 \]
+
+\noindent
+\quad Wzór na przedzia\l\ ufności dla wartości średniej w rozk\l adzie o nieznanym odchyleniu standardowym:
+
+\[ \bar{x} \pm t_{\frac{\alpha}{2}}\frac{s}{\sqrt{n}}\]
+
+\noindent
+\quad Wzór na przedzia\l\ ufności dla wariancji:
+
+\[ \left[S\sqrt{\frac{n-1}{\chi^2_{1-\frac{\alpha}{2}, n-1}}}, S\sqrt{\frac{n-1}{\chi^2_{\frac{\alpha}{2}, n-1}}}\right] \]
+
+\subsubsection{\textit{median\_income}}
+\quad O ile dany rozk\l ad nie jest rozk\l adem normalnym, to możemy ograniczy\'c si\c e do estymacji średniej i wariancji, ale już bez przedzia\l ów ufności, ponieważ one zak\l adają, że rozk\l ad jest normalny.
+
+\begin{Schunk}
+\begin{Sinput}
+> income = na.omit(no_outs$median_income)
+> mu1 = mean(income)
+> var1 = var(income)
+> newr1 <- data.frame(mu1, NA, NA, var1, NA, NA)
+> names(newr1) <- names(estimations)
+> estimations <- rbind(estimations, newr1)
+\end{Sinput}
+\end{Schunk}
+
+\subsubsection{\textit{median\_income} log10-transformed}
+\quad Tylko dla pokazania jak wygląda\l o by liczenie wszystkich estymatorów, przedstawiamy ten proces dla normalnego rozk\l adu, który uzyskaliśmy transformując jedną z cech.
+
+\begin{Schunk}
+\begin{Sinput}
+> bprlogn = na.omit(bprlog$d)
+> n4 = length(bprlogn) 
+> s4 = sd(bprlogn)
+> SE4 = s4/sqrt(n4)
+> E4 = qt(.975, df = n4 - 1) * SE4
+> mu4 = mean(bprlogn)
+> var4 = var(bprlogn)
+> newr4 <- data.frame(mu4, mu4 - E4, mu4 + E4, var4, 
++                     var4*(n4-1)/qchisq(.975, n4-1), 
++                     var4*(n4-1)/qchisq(.025, n4-1))
+> names(newr4) <- names(estimations)
+> estimations <- rbind(estimations, newr4)  
+\end{Sinput}
+\end{Schunk}
+
+\subsubsection{\textit{median\_house\_value}}
+
+\begin{Schunk}
+\begin{Sinput}
+> house.value = na.omit(no_outs$median_house_value)
+> mu2 = mean(house.value)
+> var2 = var(house.value)
+> newr2 <- data.frame(mu2, NA, NA, var2, NA, NA)
+> names(newr2) <- names(estimations)
+> estimations <- rbind(estimations, newr2)  
+\end{Sinput}
+\end{Schunk}
+
+\subsubsection{\textit{bedrooms\_per\_rooms}}
+
+\begin{Schunk}
+\begin{Sinput}
+> bpr = na.omit(no_outs$bedrooms_per_rooms)
+> mu3 = mean(bpr)
+> var3 = var(bpr)
+> newr3 <- data.frame(mu3, NA, NA, var3, NA, NA)
+> names(newr3) <- names(estimations)
+> estimations <- rbind(estimations, newr3)
+\end{Sinput}
+\end{Schunk}
+
+\noindent
+\quad Zobaczmy teraz jak wygląda nasza tablica.
+
+\begin{Schunk}
+\begin{Sinput}
+> # 1 - median_income
+> # 2 - median_income log-transformed
+> # 3 - median_house_value
+> # 4 - bedrooms_per_room
+> estimations
+\end{Sinput}
+\begin{Soutput}
+           mean    meanlow     meanup          var     varlow      varup
+1  3.847174e+00         NA         NA 3.234598e+00         NA         NA
+2 -6.856271e-01 -0.6870271 -0.6842271 1.046696e-02 0.01026732 0.01067251
+3  2.073107e+05         NA         NA 1.327183e+10         NA         NA
+4  2.122168e-01         NA         NA 2.817922e-03         NA         NA
+\end{Soutput}
+\end{Schunk}
+
+\subsection{Analiza zależności pomi\c edzy danymi}
+\quad W tej podsekcji b\c edziemy zadawa\'c pytania, a potem na nich odpowiada\'c stosując odpowiednie testy statystyczne.
+
+\subsubsection{Jak bliskoś\'c do oceanu wp\l ywa na cen\c e?}
+\quad Patrząc do tablicy przedstawionej wyżej i wziątej z artyku\l u, i biorąc pod uwag\c e, że \textbf{median\_house\_value} nie jest rozk\l adem normalnym, to musimy wykorzysta\'c test nieparametryczny, w naszym przypadku - \textbf{Kruskal-Wallis test}. On przewiduje, że dane muszą by\'c niezależnymi. Zgodnie z artyku\l em dane niezależne dla grup oznaczają, że dane rekordów wśród jednej grupy muszą by\'c niezależne. Możemy przyją\'c, że one takimi są.
+
+\noindent
+\quad Dodając, nie b\c edziemy sprawdza\'c dla wszystkich grup z \textbf{ocean\_proximity}, usuniemy \textit{ISLAND}, bo jest ma\l oliczną grupą, co może nam zaszkodzi\'c w przeprowadzeniu testu.
+
+\noindent
+\quad Jednym za\l ożeniem jest jednakowa forma i skala w różnych grupach. My nie mamy drastycznych różnic w ilości rekordów każdej grupie i taką samą skal\c e, wi\c e przyt\c epujemy do testu.
+
+\noindent
+\quad \textbf{$H_0$} - hipotezą zerową - jest to, że wszystkie mediany są równe, czyli w każdej grupie wartoś\'c domów nie różni si\c e. Alternatywną hipotezą jest, że przynajmniej w jednej grupie jest inna tendencja. Rysunki do tego by\l y przestawione jeszcze na etapie zamiany kategorycznej zmiennej na numeryczną.
+
+\begin{Schunk}
+\begin{Sinput}
+> krusktmpdata <- no_outs %>% filter(ocean_proximity != 5)
+> kruskal.test(median_house_value ~ ocean_proximity, data = krusktmpdata)
+\end{Sinput}
+\begin{Soutput}
+	Kruskal-Wallis rank sum test
+
+data:  median_house_value by ocean_proximity
+Kruskal-Wallis chi-squared = 6581.7, df = 3, p-value < 2.2e-16
+\end{Soutput}
+\end{Schunk}
+
+\noindent
+\quad Otrzymaliśmy bardzo ma\l ą wartoś\'c $p$, wi\c ec odrzucamy hipotez\c e zerową na korzyś\'c alternatywnej. Czyli bliskoś\'c do oceanu wp\l ywa na ceny mieszkań.
+
+\subsubsection{Jak różni si\c e cena na mieszkania pomi\c edzy \textit{NEAR BAY} i \textit{NEAR OCEAN}?}
+\quad To jest kontynuacja poprzedniego pytania, ponieważ dostaliśmy wynik, że przynajmniej w jednej grupie jest inna tendencja dla cen, i jest to doś\'c logiczne, im bliżej do wody, tym droższe są mieszkania. Ale mieliśmy wcześniej problem z wyznaczaniem różnicy pomi\c edzy \textit{NEAR BAY} i \textit{NEAR OCEAN}. Ustaliliśmy, że dla \textit{NEAR BAY} ceny są wi\c eksze, ale czy naprawd\c e by\l a jakaś różnica w tym? Może ceny nie różnią si\c e pomi\c edzy tymi dwoma kategoriami? Sprawdźmy to.
+
+\noindent
+\quad Nasze dane w grupach dalej nie mają rozk\l adu normalnego, wi\c ec musimy wykorzysta\'c test nieparametryczny, w naszym przypadku to \textbf{Mann-Whitney test}.
+
+\begin{Schunk}
+\begin{Sinput}
+> whitntmpdata <- no_outs %>% filter(ocean_proximity == 3 || ocean_proximity == 4)
+> wilcox.test(whitntmpdata$median_house_value, whitntmpdata$ocean_proximity)
+\end{Sinput}
+\begin{Soutput}
+	Wilcoxon rank sum test with continuity correction
+
+data:  whitntmpdata$median_house_value and whitntmpdata$ocean_proximity
+W = 424792110, p-value < 2.2e-16
+alternative hypothesis: true location shift is not equal to 0
+\end{Soutput}
+\end{Schunk}
+
+\noindent
+\quad Test daje nam wynik dla wartości $p$ bardzo ma\l y, co oznacza, że analogiczna hipoteza zerowa jak i w poprzednim teście zostaje odrzucona. Czyli jest różnica pomi\c edzy cenami w grupach \textit{NEAR BAY} i \textit{NEAR OCEAN}.
+
+\subsubsection{Czy wp\l ywa \textit{median\_income} na \textit{median\_house\_value}?}
+\quad Wcześniej widzieliśmy bardzo duży wspó\l czynnik korelacji mi\c edzy tymi cechami. Sprawdźmy przy pomocy testu \textbf{Spearman}'a.
+
+\noindent
+\quad Hipotezą zerową jest \textbf{$H_0$} - nie istnieje monotonicznej zależności pomi\c edzy cechami. Odpowiednio hipoteza alternatywna stwierdza, że istnieje.
+
+\begin{Schunk}
+\begin{Sinput}
+> cor.test(no_outs$median_house_value, no_outs$median_income, method = "spearman")
+\end{Sinput}
+\begin{Soutput}
+	Spearman's rank correlation rho
+
+data:  no_outs$median_house_value and no_outs$median_income
+S = 4.6573e+11, p-value < 2.2e-16
+alternative hypothesis: true rho is not equal to 0
+sample estimates:
+      rho 
+0.6739262 
+\end{Soutput}
+\end{Schunk}
+
+\noindent
+\quad Wartoś\'c $p$ jest znikoma, wi\c ec odrzucam hipotez\c e zerową. Stwierdzamy, że istnieje monotoniczna zależnoś\'c pomi\c edzy danymi cechami. Dodatkowo wspó\l czynnik $\rho = 0.6739262$ pokazuje jak silnie zależą jedno od drugiego.
+
+\noindent
+\quad Test \textbf{Spearman}'a jest nieparametrycznym, musieliśmy taki wykorzysta\'c ze wzgl\c edu na nienormalny rozk\l ad cech.
+
+\subsubsection{Jak \textit{rooms\_per\_person} wp\l ywa na \textit{median\_house\_value}?}
+\quad Korzystamy z tego samego testu \textbf{Spearman}'a.
+
+\begin{Schunk}
+\begin{Sinput}
+> cor.test(no_outs$median_house_value, no_outs$rooms_per_person, method = "spearman")
+\end{Sinput}
+\begin{Soutput}
+	Spearman's rank correlation rho
+
+data:  no_outs$median_house_value and no_outs$rooms_per_person
+S = 8.4815e+11, p-value < 2.2e-16
+alternative hypothesis: true rho is not equal to 0
+sample estimates:
+      rho 
+0.4060968 
+\end{Soutput}
+\end{Schunk}
+
+\noindent
+\quad Wartoś\'c $p$ jest bliska 0, wi\c ec odrzucamy \textbf{$H_0$}. Wspó\l czynnik $\rho = 0.4$ wskazuje jak silnie są zależne, bo są one zależne monotonicznie, o tym nam mówi hipoteza alternatywna.
+
+\subsection{Regresja}
+\quad Regresja potrzebuje spe\l nienia dużej ilości za\l ożeń, wi\c ec stwórzmy ją, i potem b\c edziemy testowali czy nasze za\l ożenia zachodzą.
+
+\noindent
+\quad Mamy taką list\c e za\l ożeń:
+
+\begin{itemize}
+  \item Wszystkie wspó\l czynniki i sk\l adniki bez zmiennej są sta\l ymi, czyli inaczej mówiąc, model jest liniowy. To samo stosuje si\c e \textit{error term}, czyli naszych \textit{residuals}. Zak\l adamy, że są z wspó\l czynnikiem równym 1. Powinna zachodzi\'c nast\c epna równoś\'c:
+  \[ Y = \beta_0 + \beta_1X_1 + \beta_2X_2 + \dots + \beta_kX_k + \epsilon \]
+  
+  \noindent
+  \quad Wszystkie $\beta_1 \dots \beta_k = const$
+  \item Średnia populacji \textit{residuals} jest równa 0, to oznacza, że nasz model nie robi predykcj\c e powyżej, lub poniżej rzeczywistych wartości.
+  \item Wszystkie zmienne są nieskorelowane z \textit{residuals}, czyli zachowujemy definicj\c e \textit{residuals} jako losowy b\l ąd.
+  \item Same wartości w \textit{residuals} nie są z sobą skorelowane, czyli nie da si\c e przewidzie\'c nast\c epną wartoś\'c mając wartości, które pojawi\l y si\c e przed.
+  \item Wariancja \textit{residuals} jest sta\lą
+  \item Żadna zmienna nie jest idealną liniową funkcją pozosta\l ych. Także nie powinno si\c e pojawi\'c bardzo silnych korelacji.
+  \item \textbf{Opcjonalny.} Rozk\l ad \textit{residuals} jest normalny. Niespe\l nienie tego warunku nie jest za\l ożeniem samego modelu OLS, ale musi zachodzi\'c, jeżeli chcemy bada\'c różne hipotezy i tworzy\'c przedzia\l y ufności i inne.
+\end{itemize}
+
+\noindent
+\quad Oj, troch\c e jest do sprawdzenia, może dlatego zgodnie z statystyką podaną wyżej tylko 22\% prac naukowych sprawdzili wszystkie za\l ożenia w swoich testach?
+
+\noindent
+\quad Na sam początek, tworzymy nasz model i sprawdzamy go:
+
+\begin{Schunk}
+\begin{Sinput}
+> model <- lm(median_house_value ~ median_income + ocean_proximity +
++               bedrooms_per_rooms + rooms_per_person + latitude + 
++               housing_median_age, no_outs, na.action=na.omit)
+> summary(model)
+\end{Sinput}
+\begin{Soutput}
+Call:
+lm(formula = median_house_value ~ median_income + ocean_proximity + 
+    bedrooms_per_rooms + rooms_per_person + latitude + housing_median_age, 
+    data = no_outs, na.action = na.omit)
+
+Residuals:
+    Min      1Q  Median      3Q     Max 
+-503913  -40937   -8003   30481  459952 
+
+Coefficients:
+                     Estimate Std. Error t value Pr(>|t|)    
+(Intercept)        -108778.18   10138.94  -10.73   <2e-16 ***
+median_income        49370.81     398.80  123.80   <2e-16 ***
+ocean_proximity      24590.99     571.16   43.05   <2e-16 ***
+bedrooms_per_rooms  626137.65   13324.83   46.99   <2e-16 ***
+rooms_per_person     36326.22     855.67   42.45   <2e-16 ***
+latitude             -4612.76     240.42  -19.19   <2e-16 ***
+housing_median_age    1277.77      41.48   30.80   <2e-16 ***
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Residual standard error: 68350 on 20078 degrees of freedom
+  (555 observations deleted due to missingness)
+Multiple R-squared:  0.6399,	Adjusted R-squared:  0.6398 
+F-statistic:  5946 on 6 and 20078 DF,  p-value: < 2.2e-16
+\end{Soutput}
+\end{Schunk}
+
+\noindent
+\quad Widzimy, że wszystkie nasze zmienne są bardzo znaczące. I chociaż $R^2$ nie jest aż tak duża, ale wciąż wystarczająca dla nas. Dla każdej zmiennej wartoś\'c $p$ jest bliska zeru, czyli odrzucamy hipotez\c e zerową, że nie są powiązane i zostawiamy wszystkie zmienne. Zaczniemy sprawdza\'c za\l ożenia.
+
+\begin{itemize}
+  \item Wszystkie wspó\l czynniki są wartościami sta\l ymi, wi\c ec pierwsze za\l ożenie jest spe\l nione.
+  \item Sprawdźmy średnią \textit{residuals}:
+\begin{Schunk}
+\begin{Sinput}
+> mean(model$residuals)
+\end{Sinput}
+\begin{Soutput}
+[1] -2.321714e-11
+\end{Soutput}
+\end{Schunk}
+
+  \noindent
+  \quad Wartoś\'c jest bardzo bliska 0, wi\c ec zak\l adamy, że za\l ożenie jest spe\l nione, biorąc dodatkowo pod uwag\c e, że same wartości \textit{residuals} są rz\c edu dziesiątków tysi\c ecy i wi\c ecej.
+  
+  \noindent
+  \quad Narysujmy sobie od razu histogram \textit{residuals}.
+  
+  \newpage
+  
+  \begin{figure}[h!]
+  \centering
+  \includegraphics[width=\textwidth]{report-residualshist}
+  \end{figure}
+  
+  \noindent
+  \quad Widzimy, że rozk\l ad jest bardzo podobny do normalnego, sprawdzimy to poźniej jeszcze i dok\l adniej.
+  
+  \item Sprawdzamy wsp. korelacji
+  
+\begin{Schunk}
+\begin{Sinput}
+> cor(model$model, model$residuals)
+\end{Sinput}
+\begin{Soutput}
+                           [,1]
+median_house_value 6.000820e-01
+median_income      9.459248e-17
+ocean_proximity    1.346156e-15
+bedrooms_per_rooms 5.304133e-17
+rooms_per_person   7.446344e-17
+latitude           2.135699e-17
+housing_median_age 2.104424e-16
+\end{Soutput}
+\end{Schunk}
+
+  \noindent
+  \quad Korelacja jest praktycznie zero, w szczególności dla zmiennych bazując si\c e na których, robimy prewidywanie $Y$. Za\l ożenie spe\l nione.
+  
+  \item Możemy sprawdzi\'c niezależnoś\'c wartości \textit{residuals} wewnątrz siebie rysując wykres zależny od indeksu.
+  
+  \newpage
+  
+  \begin{figure}[h!]
+  \centering
+  \includegraphics[width=\textwidth]{report-scatterresidual}
+  \end{figure}
+  
+  \noindent
+  \quad Nie widzimy żadnych zależności. Za\l ożenie spe\l nione.
+  
+  \item Wykorzystując wykres z poprzedniego punktu, możemy stwierdzi\'c, że \textit{residuals} ma sta\lą wariancj\c e. Nie da si\c e stwierdzi\'c, że gdzieś odchylenie jest wi\c eksze lub mniejsze. Za\l ożenie spe\l nione.
+  
+  \item Sprawdźmy korelacj\c e pomi\c edzy zmiennymi.
+
+  \begin{figure}[h!]
+  \centering
+  \includegraphics[width=0.7\textwidth]{report-residualcorrplot}
+  \end{figure}
+  
+  \noindent
+  \quad Najbardziej nas interesują zmienne $X$, a nie $Y$. Widzimy, że nigdzie nie ma idealnej korelacji lub bardzo silnej. W\l aśnie przetwarzając cechy w \textbf{feature engineering} od razu wspominaliśmy, że musimy spe\l ni\'c to za\l ożenie. I jest ono spe\l nione.
+  
+  \item Ostatnie opcjonalne za\l ożenie potrzebne nam do podalszego przeprowadzenia testów statystycznych. Sprawdźmy po prostu stosując QQ-plot i \textbf{Shapiro-Wilk test}. Nie b\c edziemy powtarza\'c ca\l ej procedury jak przy testowaniu cech.
+  
+  \begin{figure}[h!]
+  \centering
+  \includegraphics[width=\textwidth]{report-residualqqplot}
+  \end{figure}
+  
+  \noindent
+  \quad Linia jest doś\'c bliska do prostej, ale wciąż ma pewne odkszta\l cenia. Zobaczmy co nam powie test. Zrobimy ich 5 ze wzgl\c edu na wyżej opisane przyczyny.
+  
+\begin{Schunk}
+\begin{Sinput}
+> shapiro.test(sample(model$residuals, 50))
+\end{Sinput}
+\begin{Soutput}
+	Shapiro-Wilk normality test
+
+data:  sample(model$residuals, 50)
+W = 0.93357, p-value = 0.007562
+\end{Soutput}
+\begin{Sinput}
+> shapiro.test(sample(model$residuals, 50))
+\end{Sinput}
+\begin{Soutput}
+	Shapiro-Wilk normality test
+
+data:  sample(model$residuals, 50)
+W = 0.93895, p-value = 0.01224
+\end{Soutput}
+\begin{Sinput}
+> shapiro.test(sample(model$residuals, 50))
+\end{Sinput}
+\begin{Soutput}
+	Shapiro-Wilk normality test
+
+data:  sample(model$residuals, 50)
+W = 0.97377, p-value = 0.3271
+\end{Soutput}
+\begin{Sinput}
+> shapiro.test(sample(model$residuals, 50))
+\end{Sinput}
+\begin{Soutput}
+	Shapiro-Wilk normality test
+
+data:  sample(model$residuals, 50)
+W = 0.87969, p-value = 0.0001095
+\end{Soutput}
+\begin{Sinput}
+> shapiro.test(sample(model$residuals, 50))
+\end{Sinput}
+\begin{Soutput}
+	Shapiro-Wilk normality test
+
+data:  sample(model$residuals, 50)
+W = 0.97024, p-value = 0.2367
+\end{Soutput}
+\end{Schunk}
+
+\noindent
+\quad Niektóre próbki tworzą rozk\l ad normalny, niektóre nie, same wartości $p$ nie są drastycznie ma\l e. Wartości $W$ też są doś\'c wysokie. Nie możemy stwierdzi\'c, że rozk\l ad jest normalnym, jest doś\'c bliskim do normalnego, ale nie normalnym. Wi\c ec przeprowadzając testy statystyczne musimy by\'c świadomi tego, że nasze wyniki mogą troch\c e si\c e różni\'c od rzeczywistych.
+  
+\end{itemize}
+
+\noindent
+\quad Podsumowując, stworzyliśmy model regresyjny, które odpowiada wszystkim must-have za\l ożeniom. Jest on przydatny do przewidywania mediany cen na mieszkanie mając pewne dane o miejscu i bloku domów.
+
+\section{Wnioski}
+\quad Podeszliśmy do końca naszej analizy, która zosta\l a doś\'c szczegó\l owo przeprowadzona. Nieprzydatne do analizy dane przygotowaliśmy, transformowaliśmy w takie, które odpowiadają potrzebnym nam za\l ożeniom. A potem na ich podstawie zbadaliśmy najprostsze statystyki opisujące te dane, zbadaliśmy bardzo dok\l adnie kilka cech i stworzyliśmy dla nich estymatory punktowe i przedzia\l owe. Dostaliśmy odpowiedzi na kilka pytań nas interesujących stosując testy statystyczne, a w końcu stworzyliśmy model regresyjny, z pomocą którego możemy przewidywa\'c ceny mieszkań mając pewne początkowe dane.
+
+
+\end{document}
